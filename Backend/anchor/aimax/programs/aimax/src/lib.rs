@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use solana_program::{program_error,entrypoint::ProgramResult};
 
 declare_id!("6DR8jRQALc7Lu6aW6wXdriBv5a7ro8Wcvu33hoTNNgXu");
 
@@ -14,3 +15,11 @@ pub mod aimax {
 
 #[derive(Accounts)]
 pub struct Initialize {}
+
+pub struct SVM2AnyMessage{
+    pub receiver : Vec<u8>,
+    pub data:Vec<u8>,
+    pub token_amounts:Vec<SVM2AnyMessage>,
+    pub fee_token:Pubkey,
+    pub extra_args:Vec<u8>,
+}
