@@ -15,7 +15,7 @@ pub mod aimax {
 
 #[derive(Accounts)]
 pub struct Initialize {}
-
+//标准的CCIP消息体
 pub struct SVM2AnyMessage{
     pub receiver : Vec<u8>,
     pub data:Vec<u8>,
