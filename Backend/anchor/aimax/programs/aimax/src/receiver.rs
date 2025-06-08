@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 //use anchor_spl::token::{Mint,TokenAccount};
-use anchor_spl::token_interface::{TokenAccount,Mint,TokenInterface};
+use anchor_spl::{token::spl_token::instruction::transfer_checked, token_2022::spl_token_2022, token_interface::{Mint, TokenAccount, TokenInterface}};
+use solana_program::{message, program::invoke_signed};
 
 //生成seed和bump，实现不同的PDA地址,便于验证地址的唯一性
 pub const EXTERNAL_EXECUTION_CONFIG_SEED: &[u8] = b"external_execution_config";
@@ -11,6 +12,52 @@ pub const STATE: &[u8] = b"state";
 
 
 const ANCHOR_DISCRIMINATOR: usize = 8;
+
+
+pub fn initialize(ctx:Context<Initialize>,router:Pubkey) ->Result<()> {
+        ctx.accounts
+            .state
+            .init(ctx.accounts.authority.key(), router)
+}
+
+
+pub fn ccip_receive(_ctx:Context<CcipReceive>,message:Any2SVMMessage) ->Result<()>{
+             // ---------------------------------------
+        // implement functionality here
+        // ---------------------------------------
+
+        emit!(MessageReceived {
+            message_id: message.message_id
+        });
+
+        Ok(())
+}
+
+pub fn withdraw_tokens(ctx:Context<WithdrawTokens>,amount:u64,decimals:u8) ->Result<()>{
+        let mut ix = transfer_checked(
+            &spl_token_2022::ID, 
+            &ctx.accounts.program_token_account.key(), 
+            &ctx.accounts.mint.key(), 
+            &ctx.accounts.to_token_account.key(), 
+            &ctx.accounts.token_admin.key(), 
+            &[], 
+            amount, 
+            decimals,
+        )?;
+        ix.program_id = ctx.accounts.token_program.key();
+        let seeds = &[TOKEN_ADMIN_SEED,&[ctx.bumps.token_admin]];
+        invoke_signed(
+            &ix, 
+            &[
+                ctx.accounts.program_token_account.to_account_info(), 
+                ctx.accounts.mint.to_account_info(), 
+                ctx.accounts.to_token_account.to_account_info(), 
+                ctx.accounts.token_admin.to_account_info(), 
+            ], 
+            &[&seeds[..]],
+        )?;
+        Ok(())
+}
 
 #[derive(Accounts, Debug)]
 pub struct Initialize<'info> {
