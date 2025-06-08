@@ -18,7 +18,7 @@ idl-build = ["anchor-lang/idl-build"]
 
 
 [dependencies]
-anchor-lang = "0.31.1"
+anchor-lang = { version = "0.31.0", features = [] }
 anchor-spl = "0.31.1"
 solana-program = "2.3.0"
 smalloc = "0.1.2"
