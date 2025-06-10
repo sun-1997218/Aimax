@@ -8,17 +8,10 @@ use solana_program::{
 use super::state::*;
 use super::token::*;
 use super::context::*;
-use ccip_router::messages::{GetFeeResult, SVM2AnyMessage};
+
+use crate::receiver::receiver::SVMTokenAmount;
 
 
-#[cfg(target_os = "solana")]
-#[global_allocator]
-static ALLOC: smalloc::Smalloc<
-    { solana_program::entrypoint::HEAP_START_ADDRESS as usize },
-    { solana_program::entrypoint::HEAP_LENGTH as usize },
-    16,
-    1024,
-> = smalloc::Smalloc::new();
 
 
 pub const CHAIN_CONFIG_SEED: &[u8] = b"remote_chain_config";
@@ -29,7 +22,7 @@ pub const CCIP_GET_FEE_DISCRIMINATOR: [u8; 8] = [115, 195, 235, 161, 25, 219, 60
 
 /// This program an example of a CCIP Sender Program.
 /// Used to test CCIP Router ccip_send.
-pub mod example_ccip_sender {
+
     use std::collections::BTreeSet;
 
     use super::*;
@@ -306,7 +299,7 @@ pub mod example_ccip_sender {
     ) -> Result<()> {
         Ok(())
     }
-}
+
 
 #[error_code]
 pub enum SenderError {
