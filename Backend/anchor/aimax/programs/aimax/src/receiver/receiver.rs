@@ -1,5 +1,5 @@
+
 use anchor_lang::prelude::*;
-//use anchor_spl::token::{Mint,TokenAccount};
 use anchor_spl::{token::spl_token::instruction::transfer_checked, token_2022::spl_token_2022, token_interface::{Mint, TokenAccount, TokenInterface}};
 use solana_program::{message, program::invoke_signed};
 
@@ -22,7 +22,7 @@ pub fn initialize(ctx:Context<Initialize>,router:Pubkey) ->Result<()> {
 
 
 pub fn ccip_receive(_ctx:Context<CcipReceive>,message:Any2SVMMessage) ->Result<()>{
-             // ---------------------------------------
+        // ---------------------------------------
         // implement functionality here
         // ---------------------------------------
 
@@ -348,4 +348,56 @@ pub enum CcipReceiverError {
 #[event]
 pub struct MessageReceived {
     pub message_id: [u8; 32],
+}
+
+#[cfg(test)]
+mod test{
+    use super::*;
+
+    fn create_state() ->BaseState{
+        BaseState{
+            owner:Pubkey::new_unique(),
+            ..BaseState::default()
+        }
+    }
+    #[test]
+    fn ownership(){
+        let mut  state = create_state();
+        let next_owner = Pubkey::new_unique();
+
+        assert_eq!(
+            state
+                .transfer_ownership(Pubkey::new_unique(), Pubkey::new_unique())
+                .unwrap_err(),
+                CcipReceiverError::OnlyOwner.into()
+        );
+        state.transfer_ownership(state.owner, next_owner).unwrap();
+
+        assert_eq!(
+            state.accept_ownership(Pubkey::new_unique()).unwrap_err(),
+            CcipReceiverError::OnlyOwner.into(),
+        );
+        state.accept_ownership(next_owner).unwrap();
+    }
+
+    #[test]
+    fn router(){
+        let mut state = create_state();
+
+        assert_eq!(
+            state
+                .update_router(state.owner, Pubkey::default())
+                .unwrap_err(),
+                CcipReceiverError::InvalidRouter.into(),
+        );
+        assert_eq!(
+            state
+                .update_router(Pubkey::new_unique(),Pubkey::new_unique())
+                .unwrap_err(),
+                CcipReceiverError::OnlyOwner.into(),
+        );
+        state
+            .update_router(state.owner, Pubkey::new_unique())
+            .unwrap();
+    }
 }
