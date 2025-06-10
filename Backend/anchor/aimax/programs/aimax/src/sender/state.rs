@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-
+use super::context::SVM2AnyMessage;
 // BaseState contains the state for core safety checks that can be leveraged by the implementer
 // Base state contains a limited size allow and deny list
 // Both are included to handle the size limitations on solana
@@ -69,7 +69,7 @@ impl RemoteChainConfig {
 
 pub mod builder {
     use anchor_lang::AnchorSerialize;
-    use ccip_router::messages::SVM2AnyMessage;
+    use super::SVM2AnyMessage;
 
     pub fn instruction(
         msg: &SVM2AnyMessage,

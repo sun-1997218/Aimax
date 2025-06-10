@@ -321,7 +321,7 @@ pub struct Any2SVMMessage {
     pub token_amounts: Vec<SVMTokenAmount>,
 }
 
-#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default)]
+#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default,PartialEq,Eq)]
 pub struct SVMTokenAmount {
     pub token: Pubkey,
     pub amount: u64, // solana local token amount

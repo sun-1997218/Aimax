@@ -4,6 +4,7 @@ use anchor_spl::token_interface::{Mint, TokenAccount};
 //super::* father crate but in the same floder
 use super::state::{BaseState,CcipSenderError,RemoteChainConfig};
 use super::sender::{CCIP_SENDER,CHAIN_CONFIG_SEED};
+use crate::receiver::receiver::SVMTokenAmount;
 
 const ANCHOR_DISCRIMINATOR: usize = 8;
 
@@ -245,4 +246,28 @@ pub struct WithdrawTokens<'info> {
         address = state.owner @ CcipSenderError::OnlyOwner,
     )]
     pub authority: Signer<'info>,
+}
+
+#[derive(Clone, AnchorSerialize, AnchorDeserialize, PartialEq, Debug)]
+pub struct SVM2AnyMessage {
+    pub receiver: Vec<u8>,
+    pub data: Vec<u8>,
+    pub token_amounts: Vec<SVMTokenAmount>,
+    pub fee_token: Pubkey, // pass zero address if native SOL
+    pub extra_args: Vec<u8>,
+}
+
+
+// #[derive(Clone, AnchorSerialize, AnchorDeserialize, Default, Debug, PartialEq, Eq)]
+// pub struct SVMTokenAmount {
+//     pub token: Pubkey,
+//     pub amount: u64, // u64 - amount local to solana
+// }
+
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, Debug)]
+pub struct GetFeeResult {
+    pub amount: u64,
+    pub juels: u128,
+    pub token: Pubkey,
 }
