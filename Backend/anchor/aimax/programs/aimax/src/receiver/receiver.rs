@@ -1,4 +1,5 @@
 
+//接收从其他链传入到solana链的信息，并进行处理
 use anchor_lang::prelude::*;
 use anchor_spl::{token::spl_token::instruction::transfer_checked, token_2022::spl_token_2022, token_interface::{Mint, TokenAccount, TokenInterface}};
 use solana_program::{message, program::invoke_signed};
@@ -26,11 +27,59 @@ pub fn ccip_receive(_ctx:Context<CcipReceive>,message:Any2SVMMessage) ->Result<(
         // implement functionality here
         // ---------------------------------------
 
+        if !message.data.is_empty() {
+            // Process the message data
+            msg!("Received message data: {:?}", message.data);
+        }
+
+        if !message.token_amounts.is_empty() {
+            // Process the token amounts
+            for token_amount in &message.token_amounts {
+                msg!("Received token: {:?}, amount: {}", token_amount.token, token_amount.amount);
+            }
+        }
+
         emit!(MessageReceived {
             message_id: message.message_id
         });
 
         Ok(())
+}
+
+
+pub fn update_router(ctx: Context<UpdateConfig>, new_router: Pubkey) -> Result<()> {
+    ctx.accounts
+        .state
+        .update_router(ctx.accounts.authority.key(), new_router)
+}
+
+// approve_sender creates a PDA to approve the specific source chain + remote address
+pub fn approve_sender(
+            _ctx: Context<ApproveSender>,
+            _chain_selector: u64,
+            _remote_address: Vec<u8>,
+        ) -> Result<()> {
+            Ok(())
+}
+
+pub fn unapprove_sender(
+            _ctx: Context<UnapproveSender>,
+            _chain_selector: u64,
+            _remote_address: Vec<u8>,
+        ) -> Result<()> {
+            Ok(())
+}
+
+pub fn transfer_ownership(ctx: Context<UpdateConfig>, proposed_owner: Pubkey) -> Result<()> {
+    ctx.accounts
+        .state
+        .transfer_ownership(ctx.accounts.authority.key(), proposed_owner)
+}
+
+pub fn accept_ownership(ctx: Context<AcceptOwnership>) -> Result<()> {
+    ctx.accounts
+        .state
+        .accept_ownership(ctx.accounts.authority.key())
 }
 
 pub fn withdraw_tokens(ctx:Context<WithdrawTokens>,amount:u64,decimals:u8) ->Result<()>{
@@ -314,11 +363,11 @@ pub struct ApprovedSender {}
 
 #[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize)]
 pub struct Any2SVMMessage {
-    pub message_id: [u8; 32],
-    pub source_chain_selector: u64,
-    pub sender: Vec<u8>,
-    pub data: Vec<u8>,
-    pub token_amounts: Vec<SVMTokenAmount>,
+    pub message_id: [u8; 32], //消息唯一标识符
+    pub source_chain_selector: u64,//原链ID
+    pub sender: Vec<u8>,//原链发送者地址
+    pub data: Vec<u8>,// 消息内容
+    pub token_amounts: Vec<SVMTokenAmount>,//正在转移的代币和金额
 }
 
 #[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default,PartialEq,Eq)]
