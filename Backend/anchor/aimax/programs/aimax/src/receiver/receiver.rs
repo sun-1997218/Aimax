@@ -39,12 +39,56 @@ pub fn ccip_receive(_ctx:Context<CcipReceive>,message:Any2SVMMessage) ->Result<(
             }
         }
 
+        if _ctx.remaining_accounts.len()<5 {
+            return Err(CcipReceiverError::InvalidRemainingAccounts.into());
+        }
+
+         // Extract account references from the remaining_accounts
+        let token_mint_info = &_ctx.remaining_accounts[0];
+        let source_token_account = &_ctx.remaining_accounts[1];
+        let token_admin_info = &_ctx.remaining_accounts[2];
+        let recipient_account_info = &_ctx.remaining_accounts[3];
+        let token_program_info = &_ctx.remaining_accounts[4];
+            // Verify the token_admin is the expected PDA
+
+        let (expected_token_admin, admin_bump) =
+        Pubkey::find_program_address(&[TOKEN_ADMIN_SEED], &crate::ID);
+        if token_admin_info.key() != expected_token_admin {
+        return Err(CcipReceiverError::InvalidTokenAdmin.into());
+
+                // Create and execute the token transfer instruction
+        //let signer_seeds = &[&seeds[..]];
+        let mut ix = transfer_checked(
+            &spl_token_2022::ID, 
+            &source_token_account.key(), 
+            &token_mint_info.key(), 
+            &recipient_account_info.key(), 
+            &token_admin_info.key(), 
+            &[], 
+            message.token_amounts[0].amount, 
+            message.token_amounts[0].token.decimals, // Assuming token_amounts[0] has the decimals field
+        )?;
+        ix.program_id = token_program_info.key();
+        let seeds = &[TOKEN_ADMIN_SEED, &[admin_bump]];
+        invoke_signed(
+            &ix, 
+            &[
+                source_token_account.to_account_info(), 
+                token_mint_info.to_account_info(), 
+                recipient_account_info.to_account_info(), 
+                token_admin_info.to_account_info(), 
+            ], 
+            &[&seeds[..]],
+        )?;
+}
+
         emit!(MessageReceived {
             message_id: message.message_id
         });
 
         Ok(())
 }
+ 
 
 
 pub fn update_router(ctx: Context<UpdateConfig>, new_router: Pubkey) -> Result<()> {
@@ -392,6 +436,10 @@ pub enum CcipReceiverError {
     InvalidCaller,
     #[msg("Proposed owner is invalid")]
     InvalidProposedOwner,
+    #[msg("Invalid remaining accounts")]
+    InvalidRemainingAccounts,
+    #[msg("Invalid token admin")]
+    InvalidTokenAdmin,
 }
 
 #[event]
