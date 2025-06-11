@@ -1,7 +1,9 @@
 use anchor_lang::prelude::*;
 
 pub mod receiver;
+use receiver::*;
 pub mod sender;
+use sender::*;
 
 declare_id!("6DR8jRQALc7Lu6aW6wXdriBv5a7ro8Wcvu33hoTNNgXu");
 
@@ -15,7 +17,7 @@ static ALLOC: smalloc::Smalloc<
 > = smalloc::Smalloc::new();
 
 
-pub mod ray_cross_chain {
-  
+pub mod aimax {
+    
 }
 

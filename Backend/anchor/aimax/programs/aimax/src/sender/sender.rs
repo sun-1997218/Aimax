@@ -8,7 +8,6 @@ use solana_program::{
 use super::state::*;
 use super::token::*;
 use super::context::*;
-
 use crate::receiver::receiver::SVMTokenAmount;
 
 
@@ -25,7 +24,6 @@ pub const CCIP_GET_FEE_DISCRIMINATOR: [u8; 8] = [115, 195, 235, 161, 25, 219, 60
 
     use std::collections::BTreeSet;
 
-    use super::*;
 
     pub fn initialize(ctx: Context<Initialize>, router: Pubkey) -> Result<()> {
         ctx.accounts
