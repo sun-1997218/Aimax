@@ -18,9 +18,10 @@ idl-build = ["anchor-lang/idl-build"]
 
 
 [dependencies]
-anchor-lang = { version = "0.31.0", features = [] }
+anchor-lang = { version = "0.31.0", features = ["init-if-needed"] }
 anchor-spl = "0.31.0"
-solana-program = "2.3.0"
 smalloc = "0.1.2"
 hex = "0.4.3"
+solana-program = "2.2.1"
+spl-token = {version = "3.2.0",features = ["no-entrypoint"]}
 

@@ -1,452 +1,182 @@
-
-//接收从其他链传入到solana链的信息，并进行处理
 use anchor_lang::prelude::*;
-use anchor_spl::{token::spl_token::instruction::transfer_checked, token_2022::spl_token_2022, token_interface::{Mint, TokenAccount, TokenInterface}};
-use solana_program::{message, program::invoke_signed};
+use anchor_lang::solana_program::program::invoke_signed;
+use anchor_spl::token_2022::spl_token_2022;
+use anchor_spl::token_2022::spl_token_2022::state::Mint;
+use anchor_lang::solana_program::program_pack::Pack;
+use crate::receiver::{
+    context::CcipReceive,
+    error::CCIPReceiverError,
+    events::{MessageReceived, TokenReceived, TokensForwarded},
+    state::{
+        Any2SVMMessage, MessageType, ReceivedMessage,
+        MAX_MESSAGE_DATA_SIZE, MAX_TOKEN_AMOUNTS, MAX_SENDER_ADDRESS_SIZE,TOKEN_ADMIN_SEED
+    },
+};
 
-//生成seed和bump，实现不同的PDA地址,便于验证地址的唯一性
-pub const EXTERNAL_EXECUTION_CONFIG_SEED: &[u8] = b"external_execution_config";
-pub const APPROVED_SENDER_SEED: &[u8] = b"approved_ccip_sender";
-pub const TOKEN_ADMIN_SEED: &[u8] = b"receiver_token_admin";
-pub const ALLOWED_OFFRAMP: &[u8] = b"allowed_offramp"; //允许
-pub const STATE: &[u8] = b"state";
+/// Process an incoming cross-chain message
+/// 
+/// This function is called by the CCIP Router to handle incoming cross-chain messages.
+/// It processes message data and forwards tokens to recipient accounts dynamically using remaining_accounts.
+///
+/// For token transfers, the remaining_accounts should contain these accounts in order:
+/// 1. token_mint: Account<Mint>
+/// 2. source_token_account: Account<TokenAccount> (owned by program with token_admin authority)
+/// 3. token_admin: UncheckedAccount (the PDA with authority)
+/// 4. recipient_token_account: Account<TokenAccount>
+/// 5. token_program: Program<Token>
+///
+/// # Arguments
+/// * `ctx` - The context of accounts involved in this instruction
+/// * `message` - The cross-chain message containing data and token information
+pub fn handler(
+    ctx: Context<CcipReceive>,
+    message: Any2SVMMessage,
+) -> Result<()> {
+    // --- Input Validation ---
+    // Validate data size against the maximum allowed
+    if message.data.len() > MAX_MESSAGE_DATA_SIZE {
+        msg!("Error: Message data size ({}) exceeds maximum allowed ({})", 
+             message.data.len(), MAX_MESSAGE_DATA_SIZE);
+        return Err(CCIPReceiverError::MessageDataTooLarge.into());
+    }
+    // Validate token count against the maximum allowed
+    if message.token_amounts.len() > MAX_TOKEN_AMOUNTS {
+        msg!("Error: Number of token transfers ({}) exceeds maximum allowed ({})", 
+             message.token_amounts.len(), MAX_TOKEN_AMOUNTS);
+        return Err(CCIPReceiverError::TooManyTokens.into());
+    }
+    // Validate sender address size against the maximum allowed
+    if message.sender.len() > MAX_SENDER_ADDRESS_SIZE {
+        msg!("Error: Sender address size ({}) exceeds maximum allowed ({})", 
+             message.sender.len(), MAX_SENDER_ADDRESS_SIZE);
+        return Err(CCIPReceiverError::SenderAddressTooLarge.into());
+    }
+    // --- End Input Validation ---
 
+    // Emit detailed message received event
+    emit!(MessageReceived {
+        message_id: message.message_id,
+        source_chain_selector: message.source_chain_selector,
+        sender: message.sender.clone(),
+        data_length: message.data.len() as u64,
+        token_count: message.token_amounts.len() as u8,
+    });
+    
+    // Get a mutable reference to the messages storage account
+    let messages_storage = &mut ctx.accounts.messages_storage;
 
-const ANCHOR_DISCRIMINATOR: usize = 8;
-
-
-pub fn initialize(ctx:Context<Initialize>,router:Pubkey) ->Result<()> {
-        ctx.accounts
-            .state
-            .init(ctx.accounts.authority.key(), router)
-}
-
-
-pub fn ccip_receive(_ctx:Context<CcipReceive>,message:Any2SVMMessage) ->Result<()>{
-        // ---------------------------------------
-        // implement functionality here
-        // ---------------------------------------
-
-        if !message.data.is_empty() {
-            // Process the message data
-            msg!("Received message data: {:?}", message.data);
+    // Determine the type of message based on its contents
+    let message_type = if !message.data.is_empty() && message.token_amounts.len() > 0 {
+        MessageType::ProgrammaticTokenTransfer
+    } else if !message.data.is_empty() {
+        MessageType::ArbitraryMessaging
+    } else {
+        MessageType::TokenTransfer
+    };
+    
+    // Process token transfer if tokens are involved
+    if message.token_amounts.len() > 0 {
+        // Validate the remaining_accounts structure
+        if ctx.remaining_accounts.len() < 5 {
+            return Err(CCIPReceiverError::InvalidRemainingAccounts.into());
         }
-
-        if !message.token_amounts.is_empty() {
-            // Process the token amounts
-            for token_amount in &message.token_amounts {
-                msg!("Received token: {:?}, amount: {}", token_amount.token, token_amount.amount);
-            }
+        
+        // Extract account references from the remaining_accounts
+        let token_mint_info = &ctx.remaining_accounts[0];
+        let source_token_account = &ctx.remaining_accounts[1];
+        let token_admin_info = &ctx.remaining_accounts[2];
+        let recipient_account_info = &ctx.remaining_accounts[3];
+        let token_program_info = &ctx.remaining_accounts[4];
+        
+        // Verify the token_admin is the expected PDA
+        let (expected_token_admin, admin_bump) = 
+            Pubkey::find_program_address(&[TOKEN_ADMIN_SEED], &crate::ID);
+        if token_admin_info.key() != expected_token_admin {
+            return Err(CCIPReceiverError::InvalidTokenAdmin.into());
         }
-
-        emit!(MessageReceived {
-            message_id: message.message_id
+        
+        // Validate token accounts against provided token program
+        if source_token_account.owner != token_program_info.key {
+            return Err(CCIPReceiverError::InvalidTokenAccountOwner.into());
+        }
+        
+        if recipient_account_info.owner != token_program_info.key {
+            return Err(CCIPReceiverError::InvalidTokenAccountOwner.into());
+        }
+        
+        // Get the token mint key for events
+        let token_mint_key = token_mint_info.key();
+        
+        // For simplicity, this implementation only processes the first token in the array
+        // To support multiple tokens, you would need to iterate through token_amounts and handle each one
+        let token_amount = message.token_amounts.first()
+            .map(|token| token.amount)
+            .unwrap_or(0);
+        
+        // Emit token received event
+        emit!(TokenReceived {
+            token: token_mint_key,
+            amount: token_amount,
+            index: 0,
         });
-
-        Ok(())
-}
-
-
-pub fn update_router(ctx: Context<UpdateConfig>, new_router: Pubkey) -> Result<()> {
-    ctx.accounts
-        .state
-        .update_router(ctx.accounts.authority.key(), new_router)
-}
-
-// approve_sender creates a PDA to approve the specific source chain + remote address
-pub fn approve_sender(
-            _ctx: Context<ApproveSender>,
-            _chain_selector: u64,
-            _remote_address: Vec<u8>,
-        ) -> Result<()> {
-            Ok(())
-}
-
-pub fn unapprove_sender(
-            _ctx: Context<UnapproveSender>,
-            _chain_selector: u64,
-            _remote_address: Vec<u8>,
-        ) -> Result<()> {
-            Ok(())
-}
-
-pub fn transfer_ownership(ctx: Context<UpdateConfig>, proposed_owner: Pubkey) -> Result<()> {
-    ctx.accounts
-        .state
-        .transfer_ownership(ctx.accounts.authority.key(), proposed_owner)
-}
-
-pub fn accept_ownership(ctx: Context<AcceptOwnership>) -> Result<()> {
-    ctx.accounts
-        .state
-        .accept_ownership(ctx.accounts.authority.key())
-}
-
-pub fn withdraw_tokens(ctx:Context<WithdrawTokens>,amount:u64,decimals:u8) ->Result<()>{
-        let mut ix = transfer_checked(
-            &spl_token_2022::ID, 
-            &ctx.accounts.program_token_account.key(), 
-            &ctx.accounts.mint.key(), 
-            &ctx.accounts.to_token_account.key(), 
-            &ctx.accounts.token_admin.key(), 
-            &[], 
-            amount, 
-            decimals,
+        
+        // Build transfer instruction using token-2022 layout
+        // Unpack the mint data to get decimals
+        let mint_data = Mint::unpack(*token_mint_info.try_borrow_data()?)?;
+        let decimals = mint_data.decimals;
+        
+        let mut transfer_ix = spl_token_2022::instruction::transfer_checked(
+            &spl_token_2022::ID, // Use Token-2022 to build instruction structure
+            &source_token_account.key(),
+            &token_mint_info.key(),
+            &recipient_account_info.key(),
+            &token_admin_info.key(),
+            &[],
+            token_amount,
+            decimals, // Use actual decimals from the mint
         )?;
-        ix.program_id = ctx.accounts.token_program.key();
-        let seeds = &[TOKEN_ADMIN_SEED,&[ctx.bumps.token_admin]];
+        
+        // Replace with actual token program
+        transfer_ix.program_id = token_program_info.key();
+        
+        // Derive the PDA signer seeds for the token admin
+        let seeds = &[TOKEN_ADMIN_SEED, &[admin_bump]];
+        let signer_seeds = &[&seeds[..]];
+        
+        // Execute the token transfer with the PDA as signer
         invoke_signed(
-            &ix, 
+            &transfer_ix,
             &[
-                ctx.accounts.program_token_account.to_account_info(), 
-                ctx.accounts.mint.to_account_info(), 
-                ctx.accounts.to_token_account.to_account_info(), 
-                ctx.accounts.token_admin.to_account_info(), 
-            ], 
-            &[&seeds[..]],
+                source_token_account.clone(),
+                token_mint_info.clone(),
+                recipient_account_info.clone(),
+                token_admin_info.clone(),
+            ],
+            signer_seeds,
         )?;
-        Ok(())
-}
-
-#[derive(Accounts, Debug)]
-pub struct Initialize<'info> {
-    #[account(
-        init,
-        seeds = [b"state"],
-        bump,
-        payer = authority,
-        space = ANCHOR_DISCRIMINATOR + BaseState::INIT_SPACE,
-    )]
-    pub state: Account<'info, BaseState>,
-    #[account(
-        init,
-        seeds = [TOKEN_ADMIN_SEED],
-        bump,
-        payer = authority,
-        space = ANCHOR_DISCRIMINATOR,
-    )]
-    /// CHECK: CPI signer for tokens
-    pub token_admin: UncheckedAccount<'info>,
-    #[account(mut)]
-    pub authority: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts, Debug)]
-#[instruction(message: Any2SVMMessage)]
-pub struct CcipReceive<'info> {
-    // Offramp CPI signer PDA must be first.
-    // It is not mutable, and thus cannot be used as payer of init/realloc of other PDAs.
-    #[account(
-        seeds = [EXTERNAL_EXECUTION_CONFIG_SEED, crate::ID.as_ref()],
-        bump,
-        seeds::program = offramp_program.key(),
-    )]
-    pub authority: Signer<'info>,
-
-    /// CHECK offramp program: exists only to derive the allowed offramp PDA
-    /// and the authority PDA. Must be second.
-    pub offramp_program: UncheckedAccount<'info>,
-
-    // PDA to verify that calling offramp is valid. Must be third. It is left up to the implementer to decide
-    // how they want to persist the router address to verify that this is the correct account (e.g. in the top level of
-    // a global config/state account for the receiver, which is what this example does, or hard-coded,
-    // or stored in any other way in any other account).
-    /// CHECK PDA of the router program verifying the signer is an allowed offramp.
-    /// If PDA does not exist, the router doesn't allow this offramp
-    #[account(
-        owner = state.router @ CcipReceiverError::InvalidCaller, // this guarantees that it was initialized
-        seeds = [
-            ALLOWED_OFFRAMP,
-            message.source_chain_selector.to_le_bytes().as_ref(),
-            offramp_program.key().as_ref()
-        ],
-        bump,
-        seeds::program = state.router,
-    )]
-    pub allowed_offramp: UncheckedAccount<'info>,
-
-    // -- From here on, these are receiver-specific PDAs.
-    #[account(
-        seeds = [
-            APPROVED_SENDER_SEED,
-            message.source_chain_selector.to_le_bytes().as_ref(),
-            &[message.sender.len() as u8],
-            &message.sender,
-        ],
-        bump,
-    )]
-    pub approved_sender: Account<'info, ApprovedSender>, // if PDA does not exist, the message sender and/or source chain are not approved
-    #[account(
-        seeds = [STATE],
-        bump,
-    )]
-    pub state: Account<'info, BaseState>,
-}
-
-#[derive(Accounts, Debug)]
-pub struct UpdateConfig<'info> {
-    #[account(
-        mut,
-        seeds = [STATE],
-        bump,
-    )]
-    pub state: Account<'info, BaseState>,
-    #[account(
-        address = state.owner @ CcipReceiverError::OnlyOwner,
-    )]
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts, Debug)]
-pub struct AcceptOwnership<'info> {
-    #[account(
-        mut,
-        seeds = [STATE],
-        bump,
-    )]
-    pub state: Account<'info, BaseState>,
-    #[account(
-        address = state.proposed_owner @ CcipReceiverError::OnlyProposedOwner,
-    )]
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts, Debug)]
-#[instruction(chain_selector: u64, remote_sender: Vec<u8>)]
-pub struct ApproveSender<'info> {
-    #[account(
-        seeds = [STATE],
-        bump,
-    )]
-    pub state: Account<'info, BaseState>,
-    #[account(
-        init,
-        seeds = [
-            APPROVED_SENDER_SEED,
-            chain_selector.to_le_bytes().as_ref(),
-            &[remote_sender.len() as u8],
-            &remote_sender,
-        ],
-        bump,
-        payer = authority,
-        space = ANCHOR_DISCRIMINATOR + ApprovedSender::INIT_SPACE,
-    )]
-    pub approved_sender: Account<'info, ApprovedSender>,
-    #[account(
-        mut,
-        address = state.owner @ CcipReceiverError::OnlyOwner,
-    )]
-    pub authority: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts, Debug)]
-#[instruction(chain_selector: u64, remote_sender: Vec<u8>)]
-pub struct UnapproveSender<'info> {
-    #[account(
-        mut,
-        seeds = [STATE],
-        bump,
-    )]
-    pub state: Account<'info, BaseState>,
-    #[account(
-        mut,
-        seeds = [
-            APPROVED_SENDER_SEED,
-            chain_selector.to_le_bytes().as_ref(),
-            &[remote_sender.len() as u8],
-            &remote_sender,
-        ],
-        bump,
-        close = authority,
-    )]
-    pub approved_sender: Account<'info, ApprovedSender>,
-    #[account(
-        mut,
-        address = state.owner @ CcipReceiverError::OnlyOwner,
-    )]
-    pub authority: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts, Debug)]
-pub struct WithdrawTokens<'info> {
-    #[account(
-        mut,
-        seeds = [STATE],
-        bump,
-    )]
-    pub state: Account<'info, BaseState>,
-    #[account(
-        mut,
-        token::mint = mint,
-        token::authority = token_admin,
-        token::token_program = token_program,
-    )]
-    pub program_token_account: InterfaceAccount<'info, TokenAccount>,
-    #[account(
-        mut,
-        token::mint = mint,
-        token::token_program = token_program,
-    )]
-    pub to_token_account: InterfaceAccount<'info, TokenAccount>,
-    pub mint: InterfaceAccount<'info, Mint>,
-    #[account(address = *mint.to_account_info().owner)]
-    /// CHECK: CPI to token program
-    pub token_program: AccountInfo<'info>,
-    #[account(
-        seeds = [TOKEN_ADMIN_SEED],
-        bump,
-    )]
-    /// CHECK: CPI signer for tokens
-    pub token_admin: UncheckedAccount<'info>,
-    #[account(
-        address = state.owner @ CcipReceiverError::OnlyOwner,
-    )]
-    pub authority: Signer<'info>,
-}
-
-// BaseState contains the state for core safety checks that can be leveraged by the implementer
-#[account]
-#[derive(InitSpace, Default, Debug)]
-pub struct BaseState {
-    pub owner: Pubkey,
-    pub proposed_owner: Pubkey,
-
-    pub router: Pubkey,
-}
-
-impl BaseState {
-    pub fn init(&mut self, owner: Pubkey, router: Pubkey) -> Result<()> {
-        require_keys_eq!(self.owner, Pubkey::default());
-        self.owner = owner;
-        self.update_router(owner, router)
+        
+        // Emit the tokens forwarded event
+        emit!(TokensForwarded {
+            token: token_mint_key,
+            amount: token_amount,
+            recipient: recipient_account_info.key(),
+        });
     }
+    
+    // Create and store the latest received message in our storage account
+    messages_storage.latest_message = ReceivedMessage {
+        message_id: message.message_id,
+        message_type,
+        data: message.data.clone(),
+        token_amounts: message.token_amounts.clone(),
+        received_timestamp: Clock::get()?.unix_timestamp,
+        source_chain_selector: message.source_chain_selector,
+        sender: message.sender.clone(),
+    };
 
-    pub fn transfer_ownership(&mut self, owner: Pubkey, proposed_owner: Pubkey) -> Result<()> {
-        require!(
-            proposed_owner != self.owner && proposed_owner != Pubkey::default(),
-            CcipReceiverError::InvalidProposedOwner
-        );
-        require_keys_eq!(self.owner, owner, CcipReceiverError::OnlyOwner);
-        self.proposed_owner = proposed_owner;
-        Ok(())
-    }
+    // Update the storage metadata
+    messages_storage.message_count += 1;
+    messages_storage.last_updated = Clock::get()?.unix_timestamp;
 
-    pub fn accept_ownership(&mut self, proposed_owner: Pubkey) -> Result<()> {
-        require_keys_eq!(
-            self.proposed_owner,
-            proposed_owner,
-            CcipReceiverError::OnlyProposedOwner
-        );
-        // NOTE: take() resets proposed_owner to default
-        self.owner = std::mem::take(&mut self.proposed_owner);
-        Ok(())
-    }
-
-    pub fn is_router(&self, caller: Pubkey) -> bool {
-        Pubkey::find_program_address(&[EXTERNAL_EXECUTION_CONFIG_SEED], &self.router).0 == caller
-    }
-
-    pub fn update_router(&mut self, owner: Pubkey, router: Pubkey) -> Result<()> {
-        require_keys_neq!(router, Pubkey::default(), CcipReceiverError::InvalidRouter);
-        require_keys_eq!(self.owner, owner, CcipReceiverError::OnlyOwner);
-        self.router = router;
-        Ok(())
-    }
-}
-
-#[account]
-#[derive(InitSpace, Default, Debug)]
-pub struct ApprovedSender {}
-
-#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize)]
-pub struct Any2SVMMessage {
-    pub message_id: [u8; 32], //消息唯一标识符
-    pub source_chain_selector: u64,//原链ID
-    pub sender: Vec<u8>,//原链发送者地址
-    pub data: Vec<u8>,// 消息内容
-    pub token_amounts: Vec<SVMTokenAmount>,//正在转移的代币和金额
-}
-
-#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, Default,PartialEq,Eq)]
-pub struct SVMTokenAmount {
-    pub token: Pubkey,
-    pub amount: u64, // solana local token amount
-}
-
-#[error_code]
-pub enum CcipReceiverError {
-    #[msg("Address is not router external execution PDA")]
-    OnlyRouter,
-    #[msg("Invalid router address")]
-    InvalidRouter,
-    #[msg("Invalid combination of chain and sender")]
-    InvalidChainAndSender,
-    #[msg("Address is not owner")]
-    OnlyOwner,
-    #[msg("Address is not proposed_owner")]
-    OnlyProposedOwner,
-    #[msg("Caller is not allowed")]
-    InvalidCaller,
-    #[msg("Proposed owner is invalid")]
-    InvalidProposedOwner,
-}
-
-#[event]
-pub struct MessageReceived {
-    pub message_id: [u8; 32],
-}
-
-#[cfg(test)]
-mod test{
-    use super::*;
-
-    fn create_state() ->BaseState{
-        BaseState{
-            owner:Pubkey::new_unique(),
-            ..BaseState::default()
-        }
-    }
-    #[test]
-    fn ownership(){
-        let mut  state = create_state();
-        let next_owner = Pubkey::new_unique();
-
-        assert_eq!(
-            state
-                .transfer_ownership(Pubkey::new_unique(), Pubkey::new_unique())
-                .unwrap_err(),
-                CcipReceiverError::OnlyOwner.into()
-        );
-        state.transfer_ownership(state.owner, next_owner).unwrap();
-
-        assert_eq!(
-            state.accept_ownership(Pubkey::new_unique()).unwrap_err(),
-            CcipReceiverError::OnlyOwner.into(),
-        );
-        state.accept_ownership(next_owner).unwrap();
-    }
-
-    #[test]
-    fn router(){
-        let mut state = create_state();
-
-        assert_eq!(
-            state
-                .update_router(state.owner, Pubkey::default())
-                .unwrap_err(),
-                CcipReceiverError::InvalidRouter.into(),
-        );
-        assert_eq!(
-            state
-                .update_router(Pubkey::new_unique(),Pubkey::new_unique())
-                .unwrap_err(),
-                CcipReceiverError::OnlyOwner.into(),
-        );
-        state
-            .update_router(state.owner, Pubkey::new_unique())
-            .unwrap();
-    }
-}
+    Ok(())
+} 
