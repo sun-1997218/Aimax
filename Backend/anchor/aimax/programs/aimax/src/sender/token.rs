@@ -6,7 +6,7 @@ use anchor_spl::{
     },
     token_interface,
 };
-use crate::receiver::receiver::SVMTokenAmount;
+use crate::receiver::state::SVMTokenAmount;
 use solana_program::{address_lookup_table::state::AddressLookupTable, program::invoke_signed};
 
 #[allow(clippy::too_many_arguments)]

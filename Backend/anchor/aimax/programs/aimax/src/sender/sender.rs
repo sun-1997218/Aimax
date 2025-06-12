@@ -8,7 +8,7 @@ use solana_program::{
 use super::state::*;
 use super::token::*;
 use super::context::*;
-use crate::receiver::receiver::SVMTokenAmount;
+use crate::receiver::state::SVMTokenAmount;
 
 
 

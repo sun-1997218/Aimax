@@ -95,7 +95,7 @@ pub struct Any2SVMMessage {
 }
 
 /// Struct representing a token amount in a cross-chain transfer
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug,PartialEq,Eq)]
 pub struct SVMTokenAmount {
     /// The mint address of the token on Solana
     pub token: Pubkey,

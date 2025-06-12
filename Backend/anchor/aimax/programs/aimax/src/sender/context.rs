@@ -4,7 +4,7 @@ use anchor_spl::token_interface::{Mint, TokenAccount};
 //super::* father crate but in the same floder
 use super::state::{BaseState,CcipSenderError,RemoteChainConfig};
 use super::sender::{CCIP_SENDER,CHAIN_CONFIG_SEED};
-use crate::receiver::receiver::SVMTokenAmount;
+use crate::receiver::state::SVMTokenAmount;
 
 const ANCHOR_DISCRIMINATOR: usize = 8;
 
