@@ -1,8 +1,9 @@
 
 //接收从其他链传入到solana链的信息，并进行处理
 use anchor_lang::prelude::*;
-use anchor_spl::{token::spl_token::instruction::transfer_checked, token_2022::spl_token_2022, token_interface::{Mint, TokenAccount, TokenInterface}};
-use solana_program::{message, program::invoke_signed};
+use anchor_spl::{token::spl_token::{self, instruction::transfer_checked}, token_2022::spl_token_2022, token_interface::{Mint , TokenAccount}};
+use solana_program:: program::invoke_signed;
+use solana_program::program_pack::Pack;
 
 //生成seed和bump，实现不同的PDA地址,便于验证地址的唯一性
 pub const EXTERNAL_EXECUTION_CONFIG_SEED: &[u8] = b"external_execution_config";
@@ -32,12 +33,6 @@ pub fn ccip_receive(_ctx:Context<CcipReceive>,message:Any2SVMMessage) ->Result<(
             msg!("Received message data: {:?}", message.data);
         }
 
-        if !message.token_amounts.is_empty() {
-            // Process the token amounts
-            for token_amount in &message.token_amounts {
-                msg!("Received token: {:?}, amount: {}", token_amount.token, token_amount.amount);
-            }
-        }
 
         if _ctx.remaining_accounts.len()<5 {
             return Err(CcipReceiverError::InvalidRemainingAccounts.into());
@@ -53,40 +48,47 @@ pub fn ccip_receive(_ctx:Context<CcipReceive>,message:Any2SVMMessage) ->Result<(
 
         let (expected_token_admin, admin_bump) =
         Pubkey::find_program_address(&[TOKEN_ADMIN_SEED], &crate::ID);
-        if token_admin_info.key() != expected_token_admin {
-        return Err(CcipReceiverError::InvalidTokenAdmin.into());
+        if token_admin_info.key() != expected_token_admin 
+        {
+            return Err(CcipReceiverError::InvalidTokenAdmin.into());
+        }
+            // Create and execute the token transfer instruction
+            
+            
+            let mint_data = token_admin_info.try_borrow_data()?;
+            let mint_account =spl_token::state::Mint::unpack(&mint_data)
+                .map_err(|_| CcipReceiverError::InvalidTokenAdmin)?;
+            let decimals = mint_account.decimals;
 
-                // Create and execute the token transfer instruction
-        //let signer_seeds = &[&seeds[..]];
-        let mut ix = transfer_checked(
-            &spl_token_2022::ID, 
-            &source_token_account.key(), 
-            &token_mint_info.key(), 
-            &recipient_account_info.key(), 
-            &token_admin_info.key(), 
-            &[], 
-            message.token_amounts[0].amount, 
-            message.token_amounts[0].token.decimals, // Assuming token_amounts[0] has the decimals field
-        )?;
-        ix.program_id = token_program_info.key();
-        let seeds = &[TOKEN_ADMIN_SEED, &[admin_bump]];
-        invoke_signed(
-            &ix, 
-            &[
-                source_token_account.to_account_info(), 
-                token_mint_info.to_account_info(), 
-                recipient_account_info.to_account_info(), 
-                token_admin_info.to_account_info(), 
-            ], 
-            &[&seeds[..]],
-        )?;
-}
+            let mut ix = transfer_checked(
+                &spl_token_2022::ID, 
+                &source_token_account.key(), 
+                &token_mint_info.key(), 
+                &recipient_account_info.key(), 
+                &token_admin_info.key(), 
+                &[], 
+                message.token_amounts[0].amount, 
+                decimals, // Assuming token_amounts[0] has the decimals field
+            )?;
+            ix.program_id = token_program_info.key();
+            let seeds = &[TOKEN_ADMIN_SEED, &[admin_bump]];
+            invoke_signed(
+                &ix, 
+                &[
+                    source_token_account.to_account_info(), 
+                    token_mint_info.to_account_info(), 
+                    recipient_account_info.to_account_info(), 
+                    token_admin_info.to_account_info(), 
+                ], 
+                &[&seeds[..]],
+            )?;
+    
 
-        emit!(MessageReceived {
-            message_id: message.message_id
-        });
+            emit!(MessageReceived {
+                message_id: message.message_id
+            });
 
-        Ok(())
+            Ok(())
 }
  
 
@@ -106,6 +108,8 @@ pub fn approve_sender(
             Ok(())
 }
 
+
+
 pub fn unapprove_sender(
             _ctx: Context<UnapproveSender>,
             _chain_selector: u64,
@@ -119,6 +123,7 @@ pub fn transfer_ownership(ctx: Context<UpdateConfig>, proposed_owner: Pubkey) ->
         .state
         .transfer_ownership(ctx.accounts.authority.key(), proposed_owner)
 }
+
 
 pub fn accept_ownership(ctx: Context<AcceptOwnership>) -> Result<()> {
     ctx.accounts
@@ -227,6 +232,8 @@ pub struct CcipReceive<'info> {
     )]
     pub state: Account<'info, BaseState>,
 }
+
+
 
 #[derive(Accounts, Debug)]
 pub struct UpdateConfig<'info> {
