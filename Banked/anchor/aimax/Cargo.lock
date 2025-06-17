@@ -235,7 +235,7 @@ dependencies = [
  "anyhow",
  "serde",
 ]
-rm Cargo.lock && cargo clean && cargo update
+
 [[package]]
 name = "anchor-spl"
 version = "0.31.1"

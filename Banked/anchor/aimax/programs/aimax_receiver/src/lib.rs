@@ -20,7 +20,7 @@ mod state;
 // Re-export account structures for use in program entry points
 use context::*;
 
-declare_id!("A43oJqhLuSUJ5TVz4qV63Rs5DRBLohE3YEjnt1Nz7FkB");
+declare_id!("ELmaisX3tBermvPvmcnAEuKYHMatdYA9fuimNkoF7Mhf");
 
 
 /// Token program IDs

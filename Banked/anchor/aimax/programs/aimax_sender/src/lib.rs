@@ -7,7 +7,7 @@ use anchor_lang::solana_program::{
     program::{get_return_data, invoke, invoke_signed},
 };
 
-declare_id!("6GQKbPbhCZfe7159ccavFt61hBvmNuksVHPhGyTANN1G");
+declare_id!("8cwnG9txemHdCqAJTunL3rgBDauuVCDntCSwiithzCjo");
 
 
 #[cfg(target_os = "solana")]
