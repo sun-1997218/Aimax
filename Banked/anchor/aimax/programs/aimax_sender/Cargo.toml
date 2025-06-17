@@ -1,0 +1,23 @@
+[package]
+name = "aimax_sender"
+version = "0.1.0-dev"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "aimax_sender"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = ["custom-heap"]
+custom-heap = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+
+[dependencies]
+anchor-lang = { version = "0.31.1", features = [] }
+anchor-spl = "0.31.1"
+smalloc = "0.1.2"  
