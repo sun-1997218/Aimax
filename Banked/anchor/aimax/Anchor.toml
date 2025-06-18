@@ -13,7 +13,7 @@ aimax_sender = "8cwnG9txemHdCqAJTunL3rgBDauuVCDntCSwiithzCjo"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
