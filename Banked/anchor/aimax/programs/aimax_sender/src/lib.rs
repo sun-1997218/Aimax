@@ -36,7 +36,7 @@ pub const CCIP_GET_FEE_DISCRIMINATOR: [u8; 8] = [115, 195, 235, 161, 25, 219, 60
 
 /// This program an example of a CCIP Sender Program.
 /// Used to test CCIP Router ccip_send. 
-
+//发送端函数
 #[program]
 pub mod aimax_sender {
     use std::collections::BTreeSet;

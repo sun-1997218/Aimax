@@ -53,6 +53,7 @@ pub fn get_token_account_space(program_id: &Pubkey) -> usize {
 ///
 /// A Solana program that demonstrates how to receive and process CCIP messages.
 /// It supports receiving both arbitrary data and token transfers from other chains.
+/// //接收端入口函数
 #[program]
 pub mod aimax_receiver {
     use super::*;
