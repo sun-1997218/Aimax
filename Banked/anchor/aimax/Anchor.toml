@@ -6,8 +6,8 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-aimax_receiver = "ELmaisX3tBermvPvmcnAEuKYHMatdYA9fuimNkoF7Mhf"
-aimax_sender = "8cwnG9txemHdCqAJTunL3rgBDauuVCDntCSwiithzCjo"
+aimax_receiver = "639Y5ToFkcACreQ6APkVo3zjyfPHvW6UP7Vz1Qr6kXDs"
+aimax_sender = "5XVazJ8jazYk5Vn89RExHMZvZgGM5Upw1h2P8UUbuMYn"
 
 [registry]
 url = "https://api.apr.dev"
