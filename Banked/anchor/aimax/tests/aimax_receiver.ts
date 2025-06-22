@@ -27,27 +27,27 @@ describe('aimax_receiver', () => {
   // 初始化测试环境
   before(async () => {
     // 生成PDA账户
-    [state] = await PublicKey.findProgramAddress(
+    [state] = await PublicKey.findProgramAddressSync(
       [Buffer.from('state')],
       program.programId
     );
-    [messagesStorage] = await PublicKey.findProgramAddress(
+    [messagesStorage] = await PublicKey.findProgramAddressSync(
       [Buffer.from('messages_storage')],
       program.programId
     );
-    [tokenAdmin] = await PublicKey.findProgramAddress(
+    [tokenAdmin] = await PublicKey.findProgramAddressSync(
       [Buffer.from('token_admin')],
       program.programId
     );
     
     // 计算allowedOfframp PDA (必须与Router程序匹配) [6](@ref)
-    [allowedOfframp] = await PublicKey.findProgramAddress(
+    [allowedOfframp] = await PublicKey.findProgramAddressSync(
       [Buffer.from('allowed_offramp'), OFFICIAL_ROUTER.toBuffer()],
       program.programId
     );
     
     // 生成authority PDA (需匹配OffRamp的链标识符) [1,6](@ref)
-    [authority] = await PublicKey.findProgramAddress(
+    [authority] = await PublicKey.findProgramAddressSync(
       [
         Buffer.from('external_execution_config'),
         // 此处的链标识符需与OffRamp实际使用的匹配（示例为测试值）

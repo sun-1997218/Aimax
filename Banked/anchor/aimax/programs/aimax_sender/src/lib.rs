@@ -42,7 +42,7 @@ pub mod aimax_sender {
     use std::collections::BTreeSet;
 
     use super::*;
-
+    /// 初始化，上下文
     pub fn initialize(ctx: Context<Initialize>, router: Pubkey) -> Result<()> {
         ctx.accounts
             .state
