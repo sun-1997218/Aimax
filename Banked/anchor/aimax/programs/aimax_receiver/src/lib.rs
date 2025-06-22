@@ -56,6 +56,7 @@ pub fn get_token_account_space(program_id: &Pubkey) -> usize {
 /// //接收端入口函数
 #[program]
 pub mod aimax_receiver {
+    ///引用当前区域引用的所有类型 包括上面的内容
     use super::*;
 
     /// Initialize the CCIP receiver program

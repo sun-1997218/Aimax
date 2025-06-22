@@ -7,7 +7,7 @@ pub mod ccip_receivers;
 /// Module for the get_latest_message instruction
 pub mod get_latest_message;
 
-// Export handler functions
+// 将各个模块的处理函数导出到顶层
 pub use initialize::handler as initialize_handler;
 pub use withdraw_tokens::handler as withdraw_tokens_handler;
 pub use ccip_receivers::handler as ccip_receive_handler;
