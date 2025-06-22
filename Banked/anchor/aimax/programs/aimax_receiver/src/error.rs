@@ -3,11 +3,11 @@ use anchor_lang::prelude::*;
 /// Custom error codes for the CCIP Receiver program
 #[error_code]
 pub enum CCIPReceiverError {
-    /// Error when the caller doesn't have permission to execute the function
+    /// 不是正确的CCIP接收器
     #[msg("Caller is not the configured CCIP router")]
     InvalidCaller,
 
-    /// Error when an unauthorized user attempts to perform a restricted action
+    /// 不是程序所有者
     #[msg("Unauthorized: Signer is not the program owner")]
     Unauthorized,
 

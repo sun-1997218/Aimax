@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 /// Event emitted when the receiver program is initialized
 #[event]
 pub struct ReceiverInitialized {
-    /// The pubkey of the program owner
+    /// 程序所有者的公钥
     pub owner: Pubkey,
     /// The pubkey of the router program
     pub router: Pubkey,
