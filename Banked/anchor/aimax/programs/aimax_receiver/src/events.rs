@@ -12,11 +12,11 @@ pub struct ReceiverInitialized {
 /// Event emitted when a cross-chain message is received
 #[event]
 pub struct MessageReceived {
-    /// Unique identifier of the cross-chain message
+    /// 程序ID
     pub message_id: [u8; 32],
-    /// Identifier of the source blockchain (chain selector)
+    /// 验证器
     pub source_chain_selector: u64,
-    /// Address of the sender on the source chain (in bytes)
+    /// 源地址
     pub sender: Vec<u8>,
     /// Length of the data payload in the message
     pub data_length: u64,
