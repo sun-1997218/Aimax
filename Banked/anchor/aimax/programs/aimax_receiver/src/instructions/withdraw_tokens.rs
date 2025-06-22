@@ -8,7 +8,7 @@ use crate::{
 
 /// Withdraw tokens from a program-controlled token account
 /// 
-/// This function allows the program owner to withdraw tokens from a token account
+/// 这个程序的指令允许从一个由程序控制的代币账户中提取代币。
 /// that is owned by the program (via the token_admin PDA). The tokens are sent to
 /// the specified destination token account.
 ///
